@@ -496,6 +496,9 @@ TYPE_PARSER(construct<OmpMapTypeModifier>(
     "OMPX_HOLD" >> pure(OmpMapTypeModifier::Value::Ompx_Hold) ||
     "PRESENT" >> pure(OmpMapTypeModifier::Value::Present)))
 
+TYPE_PARSER(construct<OmpAutomapModifier>(
+    "AUTOMAP" >> pure(OmpAutomapModifier::Value::Automap)))
+
 // 2.15.3.6 REDUCTION (reduction-identifier: variable-name-list)
 TYPE_PARSER(construct<OmpReductionIdentifier>(Parser<DefinedOperator>{}) ||
     construct<OmpReductionIdentifier>(Parser<ProcedureDesignator>{}))
@@ -819,6 +822,10 @@ TYPE_PARSER(construct<OmpToClause>(
     applyFunction<OmpToClause>(makeMobClause<false>,
         modifierList<OmpToClause>(maybe(","_tok)), Parser<OmpObjectList>{})))
 
+TYPE_PARSER(construct<OmpEnterClause>(
+    maybe(nonemptyList(Parser<OmpEnterClause::Modifier>{}) / ":"),
+    Parser<OmpObjectList>{}))
+
 OmpLinearClause makeLinearFromOldSyntax(OmpLinearClause::Modifier &&lm,
     OmpObjectList &&objs, std::optional<OmpLinearClause::Modifier> &&ssm) {
   std::list<OmpLinearClause::Modifier> mods;
@@ -978,7 +985,7 @@ TYPE_PARSER( //
     "DYNAMIC_ALLOCATORS" >>
         construct<OmpClause>(construct<OmpClause::DynamicAllocators>()) ||
     "ENTER" >> construct<OmpClause>(construct<OmpClause::Enter>(
-                   parenthesized(Parser<OmpObjectList>{}))) ||
+                   parenthesized(Parser<OmpEnterClause>{}))) ||
     "EXCLUSIVE" >> construct<OmpClause>(construct<OmpClause::Exclusive>(
                        parenthesized(Parser<OmpObjectList>{}))) ||
     "FAIL" >> construct<OmpClause>(construct<OmpClause::Fail>(

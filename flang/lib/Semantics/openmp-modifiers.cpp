@@ -241,6 +241,22 @@ const OmpModifierDescriptor &OmpGetDescriptor<parser::OmpExpectation>() {
 }
 
 template <>
+const OmpModifierDescriptor &OmpGetDescriptor<parser::OmpAutomapModifier>() {
+  static const OmpModifierDescriptor desc{
+      /*name=*/"automap-modifier",
+      /*props=*/
+      {
+          {60, {OmpProperty::Unique}},
+      },
+      /*clauses=*/
+      {
+          {60, {Clause::OMPC_enter}},
+      },
+  };
+  return desc;
+}
+
+template <>
 const OmpModifierDescriptor &OmpGetDescriptor<parser::OmpInteropPreference>() {
   static const OmpModifierDescriptor desc{
       /*name=*/"interop-preference",

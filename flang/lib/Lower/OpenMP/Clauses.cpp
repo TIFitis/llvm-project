@@ -772,8 +772,8 @@ Doacross make(const parser::OmpClause::Doacross &inp,
 
 Enter make(const parser::OmpClause::Enter &inp,
            semantics::SemanticsContext &semaCtx) {
-  // inp.v -> parser::OmpObjectList
-  return Enter{makeObjects(/*List=*/inp.v, semaCtx)};
+  const auto &objList = std::get<parser::OmpObjectList>(inp.v.t);
+  return Enter{makeObjects(/*List=*/objList, semaCtx)};
 }
 
 Exclusive make(const parser::OmpClause::Exclusive &inp,

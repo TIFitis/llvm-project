@@ -3837,6 +3837,11 @@ struct OmpExpectation {
   WRAPPER_CLASS_BOILERPLATE(OmpExpectation, Value);
 };
 
+struct OmpAutomapModifier {
+  ENUM_CLASS(Value, Automap);
+  WRAPPER_CLASS_BOILERPLATE(OmpAutomapModifier, Value);
+};
+
 // REF: [5.1:217-220], [5.2:293-294]
 //
 // OmpInteropRuntimeIdentifier ->                   // since 5.2
@@ -4275,6 +4280,12 @@ struct OmpFromClause {
   TUPLE_CLASS_BOILERPLATE(OmpFromClause);
   MODIFIER_BOILERPLATE(OmpExpectation, OmpIterator, OmpMapper);
   std::tuple<MODIFIERS(), OmpObjectList, /*CommaSeparated=*/bool> t;
+};
+
+struct OmpEnterClause {
+  TUPLE_CLASS_BOILERPLATE(OmpEnterClause);
+  MODIFIER_BOILERPLATE(OmpAutomapModifier);
+  std::tuple<MODIFIERS(), OmpObjectList> t;
 };
 
 // Ref: [4.5:87-91], [5.0:140-146], [5.1:166-171], [5.2:269]

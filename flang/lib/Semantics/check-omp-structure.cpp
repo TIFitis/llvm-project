@@ -3780,7 +3780,12 @@ void OmpStructureChecker::Enter(const parser::OmpClause::HasDeviceAddr &x) {
 
 void OmpStructureChecker::Enter(const parser::OmpClause::Enter &x) {
   CheckAllowedClause(llvm::omp::Clause::OMPC_enter);
-  const parser::OmpObjectList &objList{x.v};
+  if (!OmpVerifyModifiers(
+          x.v, llvm::omp::OMPC_enter, GetContext().clauseSource, context_)) {
+    return;
+  }
+  const parser::OmpObjectList &objList{
+      std::get<parser::OmpObjectList>(x.v.t)};
   SymbolSourceMap symbols;
   GetSymbolsInObjectList(objList, symbols);
   for (const auto &[symbol, source] : symbols) {
@@ -4236,7 +4241,7 @@ const parser::OmpObjectList *OmpStructureChecker::GetOmpObjectList(
 
   // Clauses with OmpObjectList as its data member
   using MemberObjectListClauses = std::tuple<parser::OmpClause::Copyprivate,
-      parser::OmpClause::Copyin, parser::OmpClause::Enter,
+      parser::OmpClause::Copyin,
       parser::OmpClause::Firstprivate, parser::OmpClause::Link,
       parser::OmpClause::Private, parser::OmpClause::Shared,
       parser::OmpClause::UseDevicePtr, parser::OmpClause::UseDeviceAddr>;
@@ -4245,7 +4250,8 @@ const parser::OmpObjectList *OmpStructureChecker::GetOmpObjectList(
   using TupleObjectListClauses = std::tuple<parser::OmpClause::Aligned,
       parser::OmpClause::Allocate, parser::OmpClause::From,
       parser::OmpClause::Lastprivate, parser::OmpClause::Map,
-      parser::OmpClause::Reduction, parser::OmpClause::To>;
+      parser::OmpClause::Reduction, parser::OmpClause::To,
+      parser::OmpClause::Enter>;
 
   // TODO:: Generate the tuples using TableGen.
   // Handle other constructs with OmpObjectList such as OpenMPThreadprivate.
