@@ -1095,6 +1095,36 @@ class MapInfoFinalizationPass
                               newMembersAttr, newMembers, memberIndices);
     }
 
+    // Assumed-shape dummy descriptors are local, rematerializable objects.
+    // Mapping each one allocates a separate device mapping and performs an
+    // individual transfer for every kernel launch. Pass simple top-level
+    // descriptors as private attach arguments instead. The runtime packs such
+    // arguments into one transfer and initializes each descriptor's base
+    // address from the corresponding data mapping.
+    bool usePrivateDescriptorArgument =
+        descCanBeDeferred && llvm::isa<mlir::omp::TargetOp>(target) &&
+        !isRefPtrPtee && !isAttachNever && !isHasDeviceAddrFlag &&
+        !fir::factory::isOptionalArgument(op.getVarPtr().getDefiningOp()) &&
+        mapMemberUsers.empty() && op.getMembers().empty();
+    if (usePrivateDescriptorArgument) {
+      mlir::omp::ClauseMapFlags mapType =
+          mlir::omp::ClauseMapFlags::priv | mlir::omp::ClauseMapFlags::attach |
+          mlir::omp::ClauseMapFlags::ref_ptr |
+          (op.getMapType() & mlir::omp::ClauseMapFlags::implicit);
+      auto privateDescriptor = mlir::omp::MapInfoOp::create(
+          builder, op->getLoc(), op.getResult().getType(), descriptor,
+          mlir::TypeAttr::get(fir::unwrapRefType(descriptor.getType())),
+          builder.getAttr<mlir::omp::ClauseMapFlagsAttr>(mapType),
+          op.getMapCaptureTypeAttr(), baseAddr.getVarPtrPtr(),
+          baseAddr.getVarPtrPtrTypeAttr(), newMembers, newMembersAttr,
+          /*bounds=*/mlir::SmallVector<mlir::Value>{},
+          /*mapperId=*/mlir::FlatSymbolRefAttr(), op.getNameAttr(),
+          /*partial_map=*/builder.getBoolAttr(false));
+      op.replaceAllUsesWith(privateDescriptor.getResult());
+      op->erase();
+      return;
+    }
+
     // If we have been provided RefPtrPtee, utilise the user specified map
     // types, otherwise, use the default descriptor map types.
     auto mapType = isRefPtrPtee ? op.getMapType()

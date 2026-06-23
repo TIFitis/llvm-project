@@ -6665,15 +6665,17 @@ processIndividualMap(llvm::IRBuilderBase &builder,
   bool isAttachMap = ((convertClauseMapFlags(mapInfoOp.getMapType()) &
                        llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_ATTACH) ==
                       llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_ATTACH);
+  bool isPrivateAttachMap =
+      isAttachMap &&
+      bitEnumContainsAll(mapInfoOp.getMapType(), omp::ClauseMapFlags::priv);
 
-  // Declare target variables are not passed to the kernel, and for the moment
-  // attach maps are not passed to the kernel. However, it is possible to create
-  // attach maps that transfer data and thus can be kernel arguments, but our
-  // existing frontend does not do this.
+  // Declare target variables are not passed to the kernel. Regular attach maps
+  // are also runtime-only, while private attach maps represent kernel
+  // arguments initialized through corresponding-pointer semantics.
   if (isTargetParam &&
       (targetDirective == TargetDirectiveEnumTy::Target &&
        !mapData.IsDeclareTarget[mapDataIdx]) &&
-      !isAttachMap)
+      (!isAttachMap || isPrivateAttachMap))
     mapFlag |= llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_TARGET_PARAM;
 
   if (mapInfoOp.getMapCaptureType() == omp::VariableCaptureKind::ByCopy &&
@@ -6996,6 +6998,27 @@ static void processMapWithMembersOf(LLVM::ModuleTranslation &moduleTranslation,
 
   auto parentClause =
       llvm::cast<omp::MapInfoOp>(mapData.MapClause[mapDataIndex]);
+
+  // Private attach parents represent descriptors passed directly as kernel
+  // arguments. Map their pointee data normally, without MEMBER_OF, and then
+  // emit the parent as a corresponding-pointer-initialized private argument.
+  // This lets the runtime pack multiple descriptors into one transfer.
+  if (bitEnumContainsAll(parentClause.getMapType(),
+                         omp::ClauseMapFlags::priv |
+                             omp::ClauseMapFlags::attach)) {
+    for (mlir::Value member : parentClause.getMembers()) {
+      auto memberClause = llvm::cast<omp::MapInfoOp>(member.getDefiningOp());
+      processIndividualMap(builder, ompBuilder, mapData,
+                           getMapDataMemberIdx(mapData, memberClause),
+                           combinedInfo, targetDirective,
+                           /*memberOfFlag=*/
+                           llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_NONE,
+                           /*isTargetParam=*/false);
+    }
+    processIndividualMap(builder, ompBuilder, mapData, mapDataIndex,
+                         combinedInfo, targetDirective);
+    return;
+  }
 
   // If we have a partial map (no parent referenced in the map clauses of the
   // directive, only members) and only a single member, we do not need to bind
@@ -8576,7 +8599,8 @@ convertOmpTarget(Operation &opInst, llvm::IRBuilderBase &builder,
 
   for (size_t i = 0, e = mapData.OriginalValue.size(); i != e; ++i) {
     // 1) Declare target arguments are not passed to kernels as arguments.
-    // 2) Attach maps are not passed in as arguments to kernels.
+    // 2) Attach maps are not passed in as arguments to kernels, except for
+    //    private attach maps used for corresponding-pointer initialization.
     // 3) Children of record objects are not passed in as arguments.
     // TODO: We currently do not handle cases where a member is explicitly
     // passed in as an argument, this will likley need to be handled in
@@ -8586,7 +8610,13 @@ convertOmpTarget(Operation &opInst, llvm::IRBuilderBase &builder,
     bool isAttachMap = (mapData.Types[i] &
                         llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_ATTACH) ==
                        llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_ATTACH;
-    if (!mapData.IsDeclareTarget[i] && !mapData.IsAMember[i] && !isAttachMap)
+    bool isPrivateAttachMap =
+        isAttachMap &&
+        (mapData.Types[i] &
+         llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_PRIVATE) ==
+            llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_PRIVATE;
+    if (!mapData.IsDeclareTarget[i] && !mapData.IsAMember[i] &&
+        (!isAttachMap || isPrivateAttachMap))
       kernelInput.push_back(mapData.OriginalValue[i]);
   }
 
