@@ -114,9 +114,10 @@ subroutine defaultmap_scalar_implicit_mapper()
     type(dtype), allocatable :: obj
 
 ! CHECK-LABEL: func.func @_QPdefaultmap_scalar_implicit_mapper
-! CHECK: %[[BASE_MAP:.*]] = omp.map.info {{.*}} map_clauses(implicit, tofrom) capture(ByRef) {{.*}} mapper(@{{.*}}) -> {{.*}} {name = ""}
+! CHECK: %[[BASE_MAP:.*]] = omp.map.info {{.*}} map_clauses(implicit, tofrom) capture(ByRef) {{.*}} -> {{.*}} {name = ""}
 ! CHECK: %[[DESC_MAP:.*]] = omp.map.info {{.*}} map_clauses(always, implicit, to) capture(ByRef) members(%[[BASE_MAP]] : [0] : {{.*}}) -> {{.*}} {name = "obj"}
-! CHECK: omp.target map_entries(%[[DESC_MAP]] -> {{.*}}, %[[BASE_MAP]] -> {{.*}})
+! CHECK: %[[ATTACH_MAP:.*]] = omp.map.info {{.*}} map_clauses(attach, ref_ptr, ref_ptee) {{.*}} {name = "obj"}
+! CHECK: omp.target map_entries(%[[DESC_MAP]] -> {{.*}}, %[[ATTACH_MAP]] -> {{.*}}, %[[BASE_MAP]] -> {{.*}})
     allocate(obj)
     !$omp target defaultmap(tofrom: scalar)
         obj%k = 40

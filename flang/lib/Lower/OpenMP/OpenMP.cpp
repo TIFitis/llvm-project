@@ -3192,10 +3192,15 @@ genTargetOp(lower::AbstractConverter &converter, lower::SymMap &symTable,
             bool isAllocatable = semantics::IsAllocatable(sym);
             bool hasDefaultMapper =
                 converter.getModuleOp().lookupSymbol(mapperIdName);
+            bool needsImplicitMapper =
+                isAllocatable &&
+                requiresImplicitDefaultDeclareMapper(*typeSpec);
             // Avoid attaching implicit default mappers to pointer captures.
-            // For large pointer-based derived aggregates this can over-map
-            // nested payloads and conflict with explicit enter/exit maps.
-            if (!isPointer && (hasDefaultMapper || isAllocatable)) {
+            // Compiler-generated mappers are only needed to deep-copy
+            // allocatable components. Mapping every component of a simply
+            // contiguous allocatable record creates unnecessary runtime map
+            // entries.
+            if (!isPointer && (hasDefaultMapper || needsImplicitMapper)) {
               if (!hasDefaultMapper) {
                 if (auto recordType = mlir::dyn_cast_or_null<fir::RecordType>(
                         converter.genType(*typeSpec)))
