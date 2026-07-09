@@ -1992,9 +1992,17 @@ public:
       TgtPtrs.push_back(TgtPtr);
       ODBG(ODT_Alloc) << "Allocated " << FirstPrivateArgSize
                       << " bytes of target memory at " << TgtPtr;
-      // Transfer data to target device
-      int Ret = Device.submitData(TgtPtr, FirstPrivateArgBuffer.data(),
-                                  FirstPrivateArgSize, AsyncInfo);
+      // Transfer data to target device. Do not submit directly from
+      // FirstPrivateArgBuffer: small buffers can use SmallVector inline
+      // storage, and PrivateArgumentManagerTy is moved into a post-processing
+      // callback before asynchronous host-to-device copies are necessarily
+      // complete.
+      char *DataSource =
+          getOrCreateSourceBufferForSubmitData(AsyncInfo, FirstPrivateArgSize);
+      std::copy(FirstPrivateArgBuffer.begin(), FirstPrivateArgBuffer.end(),
+                DataSource);
+      int Ret =
+          Device.submitData(TgtPtr, DataSource, FirstPrivateArgSize, AsyncInfo);
       if (Ret != OFFLOAD_SUCCESS) {
         ODBG(ODT_DataTransfer) << "Failed to submit data of private arguments.";
         return OFFLOAD_FAIL;
@@ -2173,7 +2181,7 @@ static int processDataBefore(ident_t *Loc, int64_t DeviceId, void *HostPtr,
       // to allocate the private memory immediately. If this is not the case,
       // then the argument can be marked for optimization and packed with the
       // other privates.
-      const bool AllocImmediately =
+      const bool AllocImmediately = IsAttach ||
           (I < ArgNum - 1 && (ArgTypes[I + 1] & OMP_TGT_MAPTYPE_MEMBER_OF));
       Ret = PrivateArgumentManager.addArg(
           HstPtrBegin, ArgSizes[I], TgtBaseOffset, IsFirstPrivate, TgtPtrBegin,
